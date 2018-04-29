@@ -1,6 +1,7 @@
 ﻿using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -14,6 +15,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using Newtonsoft.Json;
 
 namespace HeadDirectionWpf
 {
@@ -30,6 +32,12 @@ namespace HeadDirectionWpf
 
         //再生中かどうか
         bool isPlaying = false;
+
+        //OpenposeのJsonファイル
+        private OpenposeJsonSequence jsonSequence;
+        //private OpenposeOutput openposeOutput;
+       // private People people;
+
 
         public MainWindow()
         {
@@ -162,7 +170,30 @@ namespace HeadDirectionWpf
         {
         }
 
+        private void LoadJson_Click(object sender, RoutedEventArgs e)
+        {
+            jsonSequence = new OpenposeJsonSequence();
+            jsonSequence.OpenposeOutputs = new List<OpenposeOutput>();
+            //ファイルを開くダイアログボックスを表示
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+            
+            //複数ファイル選択可
+            openFileDialog.Multiselect = true;
+            //openFileDialog.Filter = "動画ファイル(*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv)|*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv";
+            if (openFileDialog.ShowDialog() != true)
+                return;
 
-
+            //すべてのフレームのJSONファイルを選択する
+            foreach(var fileName in openFileDialog.FileNames)
+            {
+                string jsonContent;
+                using(var sr = new StreamReader(fileName))
+                {
+                    jsonContent = sr.ReadLine();
+                }
+                OpenposeOutput output = JsonConvert.DeserializeObject<OpenposeOutput>(jsonContent);
+                jsonSequence.OpenposeOutputs.Add(output);
+            }
+        }
     }
 }
