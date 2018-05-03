@@ -23,6 +23,6 @@ namespace HeadDirectionWpf
 
     class People
     {
-        public double[] Pose_keypoints_2d { get; set; }
+        public float[] Pose_keypoints_2d { get; set; }
     }
 }

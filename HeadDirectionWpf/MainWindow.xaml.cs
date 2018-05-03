@@ -36,7 +36,22 @@ namespace HeadDirectionWpf
         //OpenposeのJsonファイル
         private OpenposeJsonSequence jsonSequence;
         //private OpenposeOutput openposeOutput;
-       // private People people;
+        // private People people;
+
+        //30fpsの時1フレームのmilisec
+        const double ONE_FLAME = 1.0 / 30.0;
+
+        //GoProの解像度
+        const float INPUT_VIDEO_WIDTH = 1280f;
+        const float INPUT_VIDEO_HEIGHT = 720f;
+
+        //OpenposeのJSONに含まれる配列の要素index
+        const int NOSE = 0;
+        const int REAR = 16;
+        const int LEAR = 17;
+        const int RWRIST = 4;
+        const int LWRIST = 7;
+
 
 
         public MainWindow()
@@ -44,6 +59,10 @@ namespace HeadDirectionWpf
             InitializeComponent();
         }
 
+        //
+        //動画再生関連の処理
+        //
+        #region
         private void PlayMovie()
         {
             //メディアタイムラインを作成
@@ -103,27 +122,6 @@ namespace HeadDirectionWpf
             }
         }
 
-        private void OpenFile_Click(object sender, RoutedEventArgs e)
-        {
-            //ファイルを開くダイアログボックスを表示
-            OpenFileDialog openFileDialog = new OpenFileDialog();
-            openFileDialog.Filter = "動画ファイル(*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv)|*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv";
-            if (openFileDialog.ShowDialog() != true)
-                return;
-
-            //ファイル名を保存する
-            movieFileName = openFileDialog.FileName;
-            //開いたファイルを表示
-            FileName.Text = movieFileName.Split("\\"[0]).LastOrDefault();
-
-            if (storyboard != null)
-            {
-                StopMovie();
-            }
-
-            PlayMovie();
-        }
-
         private void mediaTimeline_CurrentTimeInvalidated(object sender, EventArgs e)
         {
             if (storyboard != null)
@@ -166,6 +164,31 @@ namespace HeadDirectionWpf
             }
         }
 
+        #endregion
+
+        private void OpenFile_Click(object sender, RoutedEventArgs e)
+        {
+            //ファイルを開くダイアログボックスを表示
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+            openFileDialog.Filter = "動画ファイル(*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv)|*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv";
+            if (openFileDialog.ShowDialog() != true)
+                return;
+
+            //ファイル名を保存する
+            movieFileName = openFileDialog.FileName;
+            //開いたファイルを表示
+            FileName.Text = movieFileName.Split("\\"[0]).LastOrDefault();
+
+            if (storyboard != null)
+            {
+                StopMovie();
+            }
+
+            PlayMovie();
+        }
+
+
+
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
         }
@@ -176,7 +199,7 @@ namespace HeadDirectionWpf
             jsonSequence.OpenposeOutputs = new List<OpenposeOutput>();
             //ファイルを開くダイアログボックスを表示
             OpenFileDialog openFileDialog = new OpenFileDialog();
-            
+
             //複数ファイル選択可
             openFileDialog.Multiselect = true;
             //openFileDialog.Filter = "動画ファイル(*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv)|*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv";
@@ -184,16 +207,46 @@ namespace HeadDirectionWpf
                 return;
 
             //すべてのフレームのJSONファイルを選択する
-            foreach(var fileName in openFileDialog.FileNames)
+            foreach (var fileName in openFileDialog.FileNames)
             {
                 string jsonContent;
-                using(var sr = new StreamReader(fileName))
+                using (var sr = new StreamReader(fileName))
                 {
                     jsonContent = sr.ReadLine();
                 }
                 OpenposeOutput output = JsonConvert.DeserializeObject<OpenposeOutput>(jsonContent);
                 jsonSequence.OpenposeOutputs.Add(output);
             }
+        }
+
+        private void DrowKeyPoint(List<People> peoples)
+        {
+            CanvasBody.Children.Clear();
+
+            //必要なkey_pointを人数分描画
+            foreach (var people in peoples)
+            {
+                var points = people.Pose_keypoints_2d;
+                DrawEllipse(points[NOSE * 3], points[NOSE * 3 + 1], 10, Brushes.Blue);
+                DrawEllipse(points[REAR * 3], points[REAR * 3 + 1], 10, Brushes.Yellow);
+                DrawEllipse(points[LEAR * 3], points[LEAR * 3 + 1], 10, Brushes.Yellow);
+                DrawEllipse(points[RWRIST * 3], points[RWRIST * 3 + 1], 10, Brushes.Pink);
+                DrawEllipse(points[LWRIST * 3], points[LWRIST * 3 + 1], 10, Brushes.Pink);
+            }
+
+
+        }
+
+        private void DrawEllipse(float key_pointX, float key_pointY, int R, Brush brush)
+        {
+            var ellipse = new Ellipse() { Width = R, Height = R, Fill = brush };
+
+            var x = key_pointX * CanvasBody.ActualWidth / INPUT_VIDEO_WIDTH;
+            var y = key_pointY * CanvasBody.ActualHeight / INPUT_VIDEO_HEIGHT;
+            Canvas.SetLeft(ellipse, x - (R / 2));
+            Canvas.SetTop(ellipse, y - (R / 2));
+
+            CanvasBody.Children.Add(ellipse);
         }
     }
 }
