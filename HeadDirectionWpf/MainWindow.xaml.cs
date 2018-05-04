@@ -17,6 +17,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Newtonsoft.Json;
 using System.Timers;
+using System.Windows.Threading;
 
 namespace HeadDirectionWpf
 {
@@ -40,6 +41,7 @@ namespace HeadDirectionWpf
         // private People people;
 
         private Timer timer;
+        private DispatcherTimer dispatcherTimer;
 
         //描画用変数
         private float currentMilliSec = 0f;
@@ -74,10 +76,24 @@ namespace HeadDirectionWpf
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            timer = new Timer(ONE_FLAME);
+            timer = new Timer(1000);
             timer.Elapsed += this.Timer_Elapsed;
+
+            dispatcherTimer = new DispatcherTimer
+            {
+                Interval = new TimeSpan(0, 0, 0, 0, (int)ONE_FLAME)
+            };
+            dispatcherTimer.Tick += this.DispatcherTimer_Tick;
         }
 
+        private void DispatcherTimer_Tick(object sender, EventArgs e)
+        {
+            var openposeOutput = jsonSequence.OpenposeOutputs.ElementAt(currentFrame);
+            DrawKeyPoint(openposeOutput.Peoples);
+            currentFrame++;
+        }
+
+        [STAThread]
         private void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
             var openposeOutput = jsonSequence.OpenposeOutputs.ElementAt(currentFrame);
@@ -114,6 +130,9 @@ namespace HeadDirectionWpf
 
             isPlaying = true;
 
+            //key_point描画関係
+            currentFrame = 0;
+            dispatcherTimer.Start();
         }
 
         private void StopMovie()
@@ -130,6 +149,8 @@ namespace HeadDirectionWpf
 
             isPlaying = false;
 
+            dispatcherTimer.Stop();
+
         }
 
         private void Play_Click(object sender, RoutedEventArgs e)
@@ -138,19 +159,21 @@ namespace HeadDirectionWpf
             if (storyboard == null)
             {
                 PlayMovie();
-                timer.Start();
+                //timer.Start();
             }
             else //すでに再生されている場合は，一時停止か再び再生か
             {
                 if (isPlaying)
                 {
                     storyboard.Pause(this);
-                    timer.Stop();
+                    //timer.Stop();
+                    dispatcherTimer.Stop();
                 }
                 else
                 {
                     storyboard.Resume(this);
-                    timer.Start();
+                    //timer.Start();
+                    dispatcherTimer.Start();
                 }
                 Play.Content = isPlaying ? "Pause" : "Play";
                 isPlaying = !isPlaying;
@@ -174,7 +197,7 @@ namespace HeadDirectionWpf
         private void Stop_Click(object sender, RoutedEventArgs e)
         {
             StopMovie();
-            timer.Stop();
+            //timer.Stop();
         }
 
         private void MoviePlayer_MediaOpened(object sender, RoutedEventArgs e)
@@ -187,7 +210,8 @@ namespace HeadDirectionWpf
             if (isPlaying)
             {
                 storyboard.Pause(this);
-                timer.Stop();
+                //timer.Stop();
+                dispatcherTimer.Stop();
             }
         }
 
@@ -201,7 +225,8 @@ namespace HeadDirectionWpf
                 storyboard.Resume(this);
             }
             RecordCurrentTimeAndFrame();
-            timer.Start();
+            //timer.Start();
+            dispatcherTimer.Start();
         }
 
         #endregion
@@ -222,11 +247,11 @@ namespace HeadDirectionWpf
             if (storyboard != null)
             {
                 StopMovie();
-                timer.Stop();
+                //timer.Stop();
             }
 
             PlayMovie();
-            timer.Start();
+            //timer.Start();
         }
 
 
@@ -260,6 +285,7 @@ namespace HeadDirectionWpf
         //Canvas描画系メソッド
         //
         #region
+        [STAThread]
         private void DrawKeyPoint(List<People> peoples)
         {
             CanvasBody.Children.Clear();
@@ -273,21 +299,60 @@ namespace HeadDirectionWpf
                 DrawEllipse(points[LEAR * 3], points[LEAR * 3 + 1], 10, Brushes.Yellow);
                 DrawEllipse(points[RWRIST * 3], points[RWRIST * 3 + 1], 10, Brushes.Pink);
                 DrawEllipse(points[LWRIST * 3], points[LWRIST * 3 + 1], 10, Brushes.Pink);
+                DrawLine(points);
             }
 
 
         }
 
+        private double ConvertOpenposeToCanvasCoordinateX(double value)
+        {
+            return value * CanvasBody.ActualWidth / INPUT_VIDEO_WIDTH;
+        }
+
+        private double ConvertOpenposeToCanvasCoordinateY(double value)
+        {
+            return value * CanvasBody.ActualHeight / INPUT_VIDEO_HEIGHT;
+        }
+
+        [STAThread]
         private void DrawEllipse(float key_pointX, float key_pointY, int R, Brush brush)
         {
+            //欠損値に関しては描画しない
+            if (key_pointX <= 0f || key_pointY <= 0f) return;
+
             var ellipse = new Ellipse() { Width = R, Height = R, Fill = brush };
 
-            var x = key_pointX * CanvasBody.ActualWidth / INPUT_VIDEO_WIDTH;
-            var y = key_pointY * CanvasBody.ActualHeight / INPUT_VIDEO_HEIGHT;
+            var x = ConvertOpenposeToCanvasCoordinateX(key_pointX);
+            var y = ConvertOpenposeToCanvasCoordinateY(key_pointY);
             Canvas.SetLeft(ellipse, x - (R / 2));
             Canvas.SetTop(ellipse, y - (R / 2));
 
             CanvasBody.Children.Add(ellipse);
+        }
+
+        private void DrawLine(float[] points)
+        {
+            Point NOSEPoint = new Point(points[NOSE * 3], points[NOSE * 3 + 1]);
+            Point REARPoint = new Point(points[REAR * 3], points[REAR * 3 + 1]);
+            Point LEARPoint = new Point(points[LEAR * 3], points[LEAR * 3 + 1]);
+
+            var earCenterX = (ConvertOpenposeToCanvasCoordinateX(REARPoint.X) + ConvertOpenposeToCanvasCoordinateX(LEARPoint.X)) / 2;
+            var earCenterY = (ConvertOpenposeToCanvasCoordinateY(REARPoint.Y) + ConvertOpenposeToCanvasCoordinateY(LEARPoint.Y)) / 2;
+
+            var line = new Line()
+            {
+                X1 = earCenterX,
+                Y1 = earCenterY,
+                X2 = ConvertOpenposeToCanvasCoordinateX(NOSEPoint.X),
+                Y2 = ConvertOpenposeToCanvasCoordinateY(NOSEPoint.Y),
+                Stroke = Brushes.Red,
+                StrokeThickness = 5
+            };
+            //Canvas.SetLeft(line, 0);
+            //Canvas.SetTop(line, 0);
+            //line.StrokeThickness = 2;
+            CanvasBody.Children.Add(line);
         }
         #endregion
     }
