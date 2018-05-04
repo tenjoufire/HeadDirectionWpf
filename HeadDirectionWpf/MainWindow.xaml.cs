@@ -16,6 +16,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Newtonsoft.Json;
+using System.Timers;
 
 namespace HeadDirectionWpf
 {
@@ -38,8 +39,19 @@ namespace HeadDirectionWpf
         //private OpenposeOutput openposeOutput;
         // private People people;
 
-        //30fpsの時1フレームのmilisec
-        const double ONE_FLAME = 1.0 / 30.0;
+        private Timer timer;
+
+        //描画用変数
+        private float currentMilliSec = 0f;
+        private int currentFrame = 0;
+
+
+        //
+        //CONST values
+        //
+        #region
+        //30fpsの時1フレームのmillisec
+        const float ONE_FLAME = 1000 / 30.0f;
 
         //GoProの解像度
         const float INPUT_VIDEO_WIDTH = 1280f;
@@ -51,12 +63,32 @@ namespace HeadDirectionWpf
         const int LEAR = 17;
         const int RWRIST = 4;
         const int LWRIST = 7;
+        #endregion
 
 
 
         public MainWindow()
         {
             InitializeComponent();
+        }
+
+        private void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            timer = new Timer(ONE_FLAME);
+            timer.Elapsed += this.Timer_Elapsed;
+        }
+
+        private void Timer_Elapsed(object sender, ElapsedEventArgs e)
+        {
+            var openposeOutput = jsonSequence.OpenposeOutputs.ElementAt(currentFrame);
+            DrawKeyPoint(openposeOutput.Peoples);
+            currentFrame++;
+        }
+
+        private void RecordCurrentTimeAndFrame()
+        {
+            currentMilliSec = MoviePlayer.Clock.CurrentTime.Value.Milliseconds;
+            currentFrame = (int)(currentMilliSec / ONE_FLAME);
         }
 
         //
@@ -106,20 +138,24 @@ namespace HeadDirectionWpf
             if (storyboard == null)
             {
                 PlayMovie();
+                timer.Start();
             }
             else //すでに再生されている場合は，一時停止か再び再生か
             {
                 if (isPlaying)
                 {
                     storyboard.Pause(this);
+                    timer.Stop();
                 }
                 else
                 {
                     storyboard.Resume(this);
+                    timer.Start();
                 }
                 Play.Content = isPlaying ? "Pause" : "Play";
                 isPlaying = !isPlaying;
             }
+            RecordCurrentTimeAndFrame();
         }
 
         private void mediaTimeline_CurrentTimeInvalidated(object sender, EventArgs e)
@@ -138,6 +174,7 @@ namespace HeadDirectionWpf
         private void Stop_Click(object sender, RoutedEventArgs e)
         {
             StopMovie();
+            timer.Stop();
         }
 
         private void MoviePlayer_MediaOpened(object sender, RoutedEventArgs e)
@@ -150,6 +187,7 @@ namespace HeadDirectionWpf
             if (isPlaying)
             {
                 storyboard.Pause(this);
+                timer.Stop();
             }
         }
 
@@ -162,6 +200,8 @@ namespace HeadDirectionWpf
             {
                 storyboard.Resume(this);
             }
+            RecordCurrentTimeAndFrame();
+            timer.Start();
         }
 
         #endregion
@@ -182,16 +222,13 @@ namespace HeadDirectionWpf
             if (storyboard != null)
             {
                 StopMovie();
+                timer.Stop();
             }
 
             PlayMovie();
+            timer.Start();
         }
 
-
-
-        private void Window_Loaded(object sender, RoutedEventArgs e)
-        {
-        }
 
         private void LoadJson_Click(object sender, RoutedEventArgs e)
         {
@@ -219,7 +256,11 @@ namespace HeadDirectionWpf
             }
         }
 
-        private void DrowKeyPoint(List<People> peoples)
+        //
+        //Canvas描画系メソッド
+        //
+        #region
+        private void DrawKeyPoint(List<People> peoples)
         {
             CanvasBody.Children.Clear();
 
@@ -248,5 +289,6 @@ namespace HeadDirectionWpf
 
             CanvasBody.Children.Add(ellipse);
         }
+        #endregion
     }
 }
