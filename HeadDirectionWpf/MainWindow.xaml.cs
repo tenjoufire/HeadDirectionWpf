@@ -18,6 +18,7 @@ using System.Windows.Shapes;
 using Newtonsoft.Json;
 using System.Timers;
 using System.Windows.Threading;
+using System.Windows.Forms;
 
 namespace HeadDirectionWpf
 {
@@ -40,7 +41,7 @@ namespace HeadDirectionWpf
         //private OpenposeOutput openposeOutput;
         // private People people;
 
-        private Timer timer;
+        private System.Timers.Timer timer;
         private DispatcherTimer dispatcherTimer;
 
         //描画用変数
@@ -65,6 +66,9 @@ namespace HeadDirectionWpf
         const int LEAR = 17;
         const int RWRIST = 4;
         const int LWRIST = 7;
+
+        //joint attentionが現れると仮定するY座標
+        const float JOINT_ATTENTION_Y = 300f;
         #endregion
 
 
@@ -76,7 +80,7 @@ namespace HeadDirectionWpf
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            timer = new Timer(1000);
+            timer = new System.Timers.Timer(1000);
             timer.Elapsed += this.Timer_Elapsed;
 
             dispatcherTimer = new DispatcherTimer
@@ -234,7 +238,7 @@ namespace HeadDirectionWpf
         private void OpenFile_Click(object sender, RoutedEventArgs e)
         {
             //ファイルを開くダイアログボックスを表示
-            OpenFileDialog openFileDialog = new OpenFileDialog();
+            Microsoft.Win32.OpenFileDialog openFileDialog = new Microsoft.Win32.OpenFileDialog();
             openFileDialog.Filter = "動画ファイル(*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv)|*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv";
             if (openFileDialog.ShowDialog() != true)
                 return;
@@ -259,17 +263,24 @@ namespace HeadDirectionWpf
         {
             jsonSequence = new OpenposeJsonSequence();
             jsonSequence.OpenposeOutputs = new List<OpenposeOutput>();
-            //ファイルを開くダイアログボックスを表示
-            OpenFileDialog openFileDialog = new OpenFileDialog();
+            string fileDirPath = "";
 
-            //複数ファイル選択可
-            openFileDialog.Multiselect = true;
-            //openFileDialog.Filter = "動画ファイル(*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv)|*.avi;*.wmv;*.mpg;*.mpeg;*.mp4;*.mkv;*.m2ts;*.flv";
-            if (openFileDialog.ShowDialog() != true)
-                return;
+            //フォルダを選択するダイアログの表示
+            FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
+            var result = folderBrowserDialog.ShowDialog();
+            if(result == System.Windows.Forms.DialogResult.OK)
+            {
+                fileDirPath = folderBrowserDialog.SelectedPath;
+            }
+            else
+            {
+                ;
+            }
+
+            string[] fileNames = Directory.GetFiles(fileDirPath, "*_keypoints.json");
 
             //すべてのフレームのJSONファイルを選択する
-            foreach (var fileName in openFileDialog.FileNames)
+            foreach (var fileName in fileNames)
             {
                 string jsonContent;
                 using (var sr = new StreamReader(fileName))
@@ -333,6 +344,7 @@ namespace HeadDirectionWpf
 
         private void DrawLine(float[] points)
         {
+            if (points[NOSE * 3] <= 0 || points[NOSE * 3 + 1] <= 0 || points[REAR * 3] <= 0 || points[REAR * 3 + 1] <= 0 || points[LEAR * 3] <= 0 || points[LEAR * 3 + 1] <= 0) return;
             Point NOSEPoint = new Point(points[NOSE * 3], points[NOSE * 3 + 1]);
             Point REARPoint = new Point(points[REAR * 3], points[REAR * 3 + 1]);
             Point LEARPoint = new Point(points[LEAR * 3], points[LEAR * 3 + 1]);
@@ -340,12 +352,16 @@ namespace HeadDirectionWpf
             var earCenterX = (ConvertOpenposeToCanvasCoordinateX(REARPoint.X) + ConvertOpenposeToCanvasCoordinateX(LEARPoint.X)) / 2;
             var earCenterY = (ConvertOpenposeToCanvasCoordinateY(REARPoint.Y) + ConvertOpenposeToCanvasCoordinateY(LEARPoint.Y)) / 2;
 
+            var katamuki = (ConvertOpenposeToCanvasCoordinateY(NOSEPoint.Y) - earCenterY) / (ConvertOpenposeToCanvasCoordinateX(NOSEPoint.X) - earCenterX);
+            var jointX = (JOINT_ATTENTION_Y - earCenterY) / katamuki + earCenterX;
+            var jointY = katamuki * (jointX - earCenterX) + earCenterY;
+
             var line = new Line()
             {
                 X1 = earCenterX,
                 Y1 = earCenterY,
-                X2 = ConvertOpenposeToCanvasCoordinateX(NOSEPoint.X),
-                Y2 = ConvertOpenposeToCanvasCoordinateY(NOSEPoint.Y),
+                X2 = jointX,
+                Y2 = jointY,
                 Stroke = Brushes.Red,
                 StrokeThickness = 5
             };
