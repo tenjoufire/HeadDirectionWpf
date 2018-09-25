@@ -66,6 +66,8 @@ namespace HeadDirectionWpf
         const int LEAR = 17;
         const int RWRIST = 4;
         const int LWRIST = 7;
+        const int REYE = 14;
+        const int LEYE = 15;
 
         //joint attentionが現れると仮定するY座標
         const float JOINT_ATTENTION_Y = 300f;
@@ -80,8 +82,8 @@ namespace HeadDirectionWpf
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            timer = new System.Timers.Timer(1000);
-            timer.Elapsed += this.Timer_Elapsed;
+            //timer = new System.Timers.Timer(1000);
+            //timer.Elapsed += this.Timer_Elapsed;
 
             dispatcherTimer = new DispatcherTimer
             {
@@ -135,7 +137,7 @@ namespace HeadDirectionWpf
             isPlaying = true;
 
             //key_point描画関係
-            currentFrame = 0;
+            //currentFrame = 0;
             dispatcherTimer.Start();
         }
 
@@ -202,6 +204,7 @@ namespace HeadDirectionWpf
         {
             StopMovie();
             //timer.Stop();
+            dispatcherTimer.Stop();
         }
 
         private void MoviePlayer_MediaOpened(object sender, RoutedEventArgs e)
@@ -263,7 +266,7 @@ namespace HeadDirectionWpf
         {
             jsonSequence = new OpenposeJsonSequence();
             jsonSequence.OpenposeOutputs = new List<OpenposeOutput>();
-            string fileDirPath = "";
+            var fileDirPath = "";
 
             //フォルダを選択するダイアログの表示
             FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
@@ -274,7 +277,7 @@ namespace HeadDirectionWpf
             }
             else
             {
-                ;
+                return;
             }
 
             string[] fileNames = Directory.GetFiles(fileDirPath, "*_keypoints.json");
@@ -300,6 +303,7 @@ namespace HeadDirectionWpf
         private void DrawKeyPoint(List<People> peoples)
         {
             CanvasBody.Children.Clear();
+            
 
             //必要なkey_pointを人数分描画
             foreach (var people in peoples)
@@ -310,10 +314,11 @@ namespace HeadDirectionWpf
                 DrawEllipse(points[LEAR * 3], points[LEAR * 3 + 1], 10, Brushes.Yellow);
                 DrawEllipse(points[RWRIST * 3], points[RWRIST * 3 + 1], 10, Brushes.Pink);
                 DrawEllipse(points[LWRIST * 3], points[LWRIST * 3 + 1], 10, Brushes.Pink);
+                DrawEllipse(points[REYE * 3], points[REYE * 3 + 1], 10, Brushes.Violet);
+                DrawEllipse(points[LEYE * 3], points[LEYE * 3 + 1], 10, Brushes.Violet);
                 DrawLine(points);
+                DrawLine2(points);
             }
-
-
         }
 
         private double ConvertOpenposeToCanvasCoordinateX(double value)
@@ -345,9 +350,9 @@ namespace HeadDirectionWpf
         private void DrawLine(float[] points)
         {
             if (points[NOSE * 3] <= 0 || points[NOSE * 3 + 1] <= 0 || points[REAR * 3] <= 0 || points[REAR * 3 + 1] <= 0 || points[LEAR * 3] <= 0 || points[LEAR * 3 + 1] <= 0) return;
-            Point NOSEPoint = new Point(points[NOSE * 3], points[NOSE * 3 + 1]);
-            Point REARPoint = new Point(points[REAR * 3], points[REAR * 3 + 1]);
-            Point LEARPoint = new Point(points[LEAR * 3], points[LEAR * 3 + 1]);
+            var NOSEPoint = new Point(points[NOSE * 3], points[NOSE * 3 + 1]);
+            var REARPoint = new Point(points[REAR * 3], points[REAR * 3 + 1]);
+            var LEARPoint = new Point(points[LEAR * 3], points[LEAR * 3 + 1]);
 
             var earCenterX = (ConvertOpenposeToCanvasCoordinateX(REARPoint.X) + ConvertOpenposeToCanvasCoordinateX(LEARPoint.X)) / 2;
             var earCenterY = (ConvertOpenposeToCanvasCoordinateY(REARPoint.Y) + ConvertOpenposeToCanvasCoordinateY(LEARPoint.Y)) / 2;
@@ -369,6 +374,67 @@ namespace HeadDirectionWpf
             //Canvas.SetTop(line, 0);
             //line.StrokeThickness = 2;
             CanvasBody.Children.Add(line);
+        }
+
+        private void DrawLine2(float[] points)
+        {
+            if (points[NOSE * 3] <= 0 || points[NOSE * 3 + 1] <= 0 || points[REYE * 3] <= 0 || points[REYE * 3 + 1] <= 0 || points[LEYE * 3] <= 0 || points[LEYE * 3 + 1] <= 0) return;
+            Point NOSEPoint = new Point(points[NOSE * 3], points[NOSE * 3 + 1]);
+            Point REYEPoint = new Point(points[REYE * 3], points[REYE * 3 + 1]);
+            Point LEYEPoint = new Point(points[LEYE * 3], points[LEYE * 3 + 1]);
+
+            var eyeCenterX = (ConvertOpenposeToCanvasCoordinateX(REYEPoint.X) + ConvertOpenposeToCanvasCoordinateX(LEYEPoint.X)) / 2;
+            var eyeCenterY = (ConvertOpenposeToCanvasCoordinateY(REYEPoint.Y) + ConvertOpenposeToCanvasCoordinateY(LEYEPoint.Y)) / 2;
+
+            var katamuki = (ConvertOpenposeToCanvasCoordinateY(NOSEPoint.Y) - eyeCenterY) / (ConvertOpenposeToCanvasCoordinateX(NOSEPoint.X) - eyeCenterX);
+            var jointX = (JOINT_ATTENTION_Y - eyeCenterY) / katamuki + eyeCenterX;
+            if (double.IsPositiveInfinity(katamuki)) katamuki = 0;
+            var jointY = katamuki * (jointX - eyeCenterX) + eyeCenterY;
+
+            var line = new Line()
+            {
+                X1 = eyeCenterX,
+                Y1 = eyeCenterY,
+                X2 = jointX,
+                Y2 = jointY,
+                Stroke = Brushes.YellowGreen,
+                StrokeThickness = 5
+            };
+            //Canvas.SetLeft(line, 0);
+            //Canvas.SetTop(line, 0);
+            //line.StrokeThickness = 2;
+            CanvasBody.Children.Add(line);
+        }
+
+
+        /// <summary>
+        /// 直線を計算するためのkey_point3つ ×2 から2直線の交点の座標を計算するメソッド
+        /// </summary>
+        /// <param name="threePoints1">直線1の座標3つ{NOSE,RIGHT,LEFT}の順</param>
+        /// <param name="threePoints2">直線2の座標3つ{NOSE,RIGHT,LEFT}の順</param>
+        /// <returns>交点の座標</returns>
+        private Point CalcIntersectionPoint(Point[] threePoints1, Point[] threePoints2)
+        {
+            var intersectionPoint = new  Point();
+
+            var centerX1 = (ConvertOpenposeToCanvasCoordinateX(threePoints1[1].X) + ConvertOpenposeToCanvasCoordinateX(threePoints1[2].X)) / 2;
+            var centerY1 = (ConvertOpenposeToCanvasCoordinateY(threePoints1[1].Y) + ConvertOpenposeToCanvasCoordinateY(threePoints1[2].Y)) / 2;
+            var katamuki1 = (ConvertOpenposeToCanvasCoordinateY(threePoints1[0].Y) - centerY1) / (ConvertOpenposeToCanvasCoordinateX(threePoints1[0].X) - centerX1);
+
+            var centerX2 = (ConvertOpenposeToCanvasCoordinateX(threePoints2[1].X) + ConvertOpenposeToCanvasCoordinateX(threePoints2[2].X)) / 2;
+            var centerY2 = (ConvertOpenposeToCanvasCoordinateY(threePoints2[1].Y) + ConvertOpenposeToCanvasCoordinateY(threePoints2[2].Y)) / 2;
+            var katamuki2 = (ConvertOpenposeToCanvasCoordinateY(threePoints2[0].Y) - centerY2) / (ConvertOpenposeToCanvasCoordinateX(threePoints2[0].X) - centerX2);
+
+            //y = ax - ax1 + y1 と y = Ax - Ax2 + y2 から2直線の交点の座標
+            var b = katamuki1 * centerX1 * -1 + centerY1;
+            var B = katamuki2 * centerX2 * -1 + centerY2;
+
+            if (katamuki1 == katamuki2) return new Point(0,0);
+
+            intersectionPoint.X = (B - b) / (katamuki1 - katamuki2);
+            intersectionPoint.Y = ((katamuki1 * B) - (katamuki2 * b)) / (katamuki1 - katamuki2);
+
+            return intersectionPoint;
         }
         #endregion
     }
