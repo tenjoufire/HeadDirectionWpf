@@ -271,7 +271,7 @@ namespace HeadDirectionWpf
             //フォルダを選択するダイアログの表示
             FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
             var result = folderBrowserDialog.ShowDialog();
-            if(result == System.Windows.Forms.DialogResult.OK)
+            if (result == System.Windows.Forms.DialogResult.OK)
             {
                 fileDirPath = folderBrowserDialog.SelectedPath;
             }
@@ -303,11 +303,14 @@ namespace HeadDirectionWpf
         private void DrawKeyPoint(List<People> peoples)
         {
             CanvasBody.Children.Clear();
-            
+
+            List<Point[]> twoLinePointsEAR = new List<Point[]>();
+            List<Point[]> twoLinePointsEYE = new List<Point[]>();
 
             //必要なkey_pointを人数分描画
-            foreach (var people in peoples)
+            for (var i = 0; i < peoples.Count; i++)
             {
+                var people = peoples[i];
                 var points = people.Pose_keypoints_2d;
                 DrawEllipse(points[NOSE * 3], points[NOSE * 3 + 1], 10, Brushes.Blue);
                 DrawEllipse(points[REAR * 3], points[REAR * 3 + 1], 10, Brushes.Yellow);
@@ -318,7 +321,18 @@ namespace HeadDirectionWpf
                 DrawEllipse(points[LEYE * 3], points[LEYE * 3 + 1], 10, Brushes.Violet);
                 DrawLine(points);
                 DrawLine2(points);
+                twoLinePointsEYE.Add(GenPointArrayEYE(points));
+                twoLinePointsEAR.Add(GenPointArrayEAR(points));
+
             }
+
+            var intersectionPointEYE = CalcIntersectionPoint(twoLinePointsEYE[0], twoLinePointsEYE[1]);
+            DrawEllipse((float)intersectionPointEYE.X, (float)intersectionPointEYE.Y, 10, Brushes.Chartreuse);
+            Console.WriteLine($@"EYE x:{intersectionPointEYE.X} y:{intersectionPointEYE.Y}");
+
+            var intersectionPointEAR = CalcIntersectionPoint(twoLinePointsEAR[0], twoLinePointsEAR[1]);
+            DrawEllipse((float)intersectionPointEAR.X, (float)intersectionPointEAR.Y, 10, Brushes.Tomato);
+            Console.WriteLine($@"EAR x:{intersectionPointEAR.X} y:{intersectionPointEAR.Y}");
         }
 
         private double ConvertOpenposeToCanvasCoordinateX(double value)
@@ -379,9 +393,9 @@ namespace HeadDirectionWpf
         private void DrawLine2(float[] points)
         {
             if (points[NOSE * 3] <= 0 || points[NOSE * 3 + 1] <= 0 || points[REYE * 3] <= 0 || points[REYE * 3 + 1] <= 0 || points[LEYE * 3] <= 0 || points[LEYE * 3 + 1] <= 0) return;
-            Point NOSEPoint = new Point(points[NOSE * 3], points[NOSE * 3 + 1]);
-            Point REYEPoint = new Point(points[REYE * 3], points[REYE * 3 + 1]);
-            Point LEYEPoint = new Point(points[LEYE * 3], points[LEYE * 3 + 1]);
+            var NOSEPoint = new Point(points[NOSE * 3], points[NOSE * 3 + 1]);
+            var REYEPoint = new Point(points[REYE * 3], points[REYE * 3 + 1]);
+            var LEYEPoint = new Point(points[LEYE * 3], points[LEYE * 3 + 1]);
 
             var eyeCenterX = (ConvertOpenposeToCanvasCoordinateX(REYEPoint.X) + ConvertOpenposeToCanvasCoordinateX(LEYEPoint.X)) / 2;
             var eyeCenterY = (ConvertOpenposeToCanvasCoordinateY(REYEPoint.Y) + ConvertOpenposeToCanvasCoordinateY(LEYEPoint.Y)) / 2;
@@ -415,7 +429,11 @@ namespace HeadDirectionWpf
         /// <returns>交点の座標</returns>
         private Point CalcIntersectionPoint(Point[] threePoints1, Point[] threePoints2)
         {
-            var intersectionPoint = new  Point();
+            if (threePoints1.Length < 3) return new Point(0, 0);
+            if (threePoints2.Length < 3) return new Point(0, 0);
+
+
+            var intersectionPoint = new Point();
 
             var centerX1 = (ConvertOpenposeToCanvasCoordinateX(threePoints1[1].X) + ConvertOpenposeToCanvasCoordinateX(threePoints1[2].X)) / 2;
             var centerY1 = (ConvertOpenposeToCanvasCoordinateY(threePoints1[1].Y) + ConvertOpenposeToCanvasCoordinateY(threePoints1[2].Y)) / 2;
@@ -429,13 +447,51 @@ namespace HeadDirectionWpf
             var b = katamuki1 * centerX1 * -1 + centerY1;
             var B = katamuki2 * centerX2 * -1 + centerY2;
 
-            if (katamuki1 == katamuki2) return new Point(0,0);
 
-            intersectionPoint.X = (B - b) / (katamuki1 - katamuki2);
-            intersectionPoint.Y = ((katamuki1 * B) - (katamuki2 * b)) / (katamuki1 - katamuki2);
+            if (katamuki1 == katamuki2) return new Point(0, 0);
+
+            intersectionPoint.X = (B - b) / (katamuki1 - katamuki2) + 275;
+            intersectionPoint.Y = ((katamuki1 * B) - (katamuki2 * b)) / (katamuki1 - katamuki2) + 150;
+
+
+            //二点(x1, y1) と(x2, y2) を通る直線と，もう二組みの点(x3, y3) と(x4, y4) を通る直線の交点の座標 （x，y） は，まず，
+            //a1 = (y2 - y1) / (x2 - x1)
+            //a3 = (y4 - y3) / (x4 - x3)
+            //を計算して，その後，
+            //x = (a1 * x1 - y1 - a3 * x3 + y3) / (a1 - a3)
+            //y = (y2 - y1) / (x2 - x1) * (x - x1) + y1
+            //ということです。
+            //intersectionPoint.X = (katamuki1 * centerX1 - centerY1 - katamuki2 * centerX2 + centerY2) / (katamuki1 - katamuki2) + 150;
+            //intersectionPoint.Y = (ConvertOpenposeToCanvasCoordinateY(threePoints1[0].Y) - centerY1) /
+            //                      (ConvertOpenposeToCanvasCoordinateX(threePoints1[0].X) - centerX1) *
+            //                      (intersectionPoint.X - centerX1) + centerY1 + 100;
 
             return intersectionPoint;
         }
         #endregion
+
+        private Point[] GenPointArrayEYE(float[] points)
+        {
+            var returnPoint = new Point[3];
+
+            if (points[NOSE * 3] <= 0 || points[NOSE * 3 + 1] <= 0 || points[REYE * 3] <= 0 || points[REYE * 3 + 1] <= 0 || points[LEYE * 3] <= 0 || points[LEYE * 3 + 1] <= 0) return new Point[0];
+            returnPoint[0] = new Point(points[NOSE * 3], points[NOSE * 3 + 1]);
+            returnPoint[1] = new Point(points[REYE * 3], points[REYE * 3 + 1]);
+            returnPoint[2] = new Point(points[LEYE * 3], points[LEYE * 3 + 1]);
+
+            return returnPoint;
+        }
+
+        private Point[] GenPointArrayEAR(float[] points)
+        {
+            var returnPoint = new Point[3];
+
+            if (points[NOSE * 3] <= 0 || points[NOSE * 3 + 1] <= 0 || points[REYE * 3] <= 0 || points[REYE * 3 + 1] <= 0 || points[LEYE * 3] <= 0 || points[LEYE * 3 + 1] <= 0) return new Point[0];
+            returnPoint[0] = new Point(points[NOSE * 3], points[NOSE * 3 + 1]);
+            returnPoint[1] = new Point(points[REAR * 3], points[REAR * 3 + 1]);
+            returnPoint[2] = new Point(points[LEAR * 3], points[LEAR * 3 + 1]);
+
+            return returnPoint;
+        }
     }
 }
